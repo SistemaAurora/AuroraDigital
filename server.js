@@ -7,8 +7,6 @@ const app = express();
 // Middleware esencial
 app.use(cors());
 app.use(express.json());
-
-// Servir archivos estáticos (index.html, css, js, etc.)
 app.use(express.static(__dirname));
 
 // Endpoint de salud para verificar que el servidor funciona
@@ -18,29 +16,32 @@ app.get('/api/health', (req, res) => {
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-if (!OPENAI_API_KEY) {
-    console.error('ERROR: OPENAI_API_KEY no está configurada en las variables de entorno');
-}
-
-// Endpoint del chat
+// Endpoint del chat con mejor manejo de errores
 app.post('/api/chat', async (req, res) => {
     try {
         const { message } = req.body;
         
+        // Validar que el mensaje exista
         if (!message) {
             return res.status(400).json({ error: 'El mensaje es requerido' });
         }
         
+        // Verificar API key
         if (!OPENAI_API_KEY) {
+            console.error('ERROR: OPENAI_API_KEY no está configurada');
             return res.status(500).json({ error: 'API key no configurada' });
         }
+
+        console.log('Procesando mensaje:', message.substring(0, 50));
 
         const response = await axios.post(
             'https://api.openai.com/v1/chat/completions',
             {
-                model: 'gpt-5-nano', // Modelo más económico y estable
+                model: 'gpt-5-nano',
                 messages: [
-                    { role: 'system', content: `Eres Aurora IA, un asistente especializado de Aurora Digital. Tu conocimiento se limita exclusivamente a la información sobre Aurora Digital que se detalla a continuación.
+                    { 
+                        role: 'system', 
+                        content: `Eres Aurora IA, un asistente especializado de Aurora Digital. Tu conocimiento se limita exclusivamente a la información sobre Aurora Digital que se detalla a continuación.
 
 SOBRE AURORA DIGITAL:
 - Nombre: Aurora Digital
@@ -145,7 +146,8 @@ REGLAS IMPORTANTES:
 - No debes responder preguntas fuera del contexto de Aurora Digital.
 - Si te preguntan algo no relacionado, amablemente indica que solo puedes ayudar con consultas sobre Aurora Digital.
 - Sé útil, conciso y profesional en tus respuestas.
-- No inventes información que no esté en este contexto.` },
+- No inventes información que no esté en este contexto.` 
+                    },
                     { role: 'user', content: message }
                 ],
                 max_tokens: 500,
@@ -160,17 +162,7 @@ REGLAS IMPORTANTES:
             }
         );
         
-        res.json({ response: response.data.choices[0].message.content });
-    } catch (error) {
-        console.error('Error:', error.response?.data || error.message);
-        res.status(500).json({ 
-            error: 'Error al procesar la solicitud',
-            details: error.response?.data?.error?.message || 'Error desconocido'
-        });
-    }
-});
-
-const aiResponse = response.data.choices[0].message.content;
+        const aiResponse = response.data.choices[0].message.content;
         console.log('Respuesta generada:', aiResponse.substring(0, 50));
         
         res.json({ response: aiResponse });
@@ -180,11 +172,11 @@ const aiResponse = response.data.choices[0].message.content;
         let errorMessage = 'Error al procesar la solicitud';
         
         if (error.code === 'ECONNABORTED') {
-            errorMessage = 'La solicitud tardó demasiado tiempo. Por favor, intenta nuevamente.';
+            errorMessage = 'La solicitud tardó demasiado tiempo';
         } else if (error.response?.status === 429) {
-            errorMessage = 'Demasiadas solicitudes. Por favor, espera un momento e intenta nuevamente.';
+            errorMessage = 'Demasiadas solicitudes. Espera un momento.';
         } else if (error.response?.status === 401) {
-            errorMessage = 'Error de autenticación. Verifica la configuración.';
+            errorMessage = 'Error de autenticación. Verifica la API key.';
         }
         
         res.status(500).json({ 
@@ -194,15 +186,9 @@ const aiResponse = response.data.choices[0].message.content;
     }
 });
 
-
-// Para todas las demás rutas, servir index.html (para SPA)
+// Para todas las demás rutas, servir index.html
 app.get('*', (req, res) => {
     res.sendFile(__dirname + '/index.html');
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Servidor iniciado en el puerto ${PORT}`);
 });
 
 // Exportar para Vercel
