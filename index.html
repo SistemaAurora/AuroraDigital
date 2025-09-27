@@ -251,6 +251,7 @@ padding: 20px;
 padding: 15px;
 border-top: 1px solid rgba(255, 255, 255, 0.1);
 display: flex;
+align-items: center;
 }
 
 .chat-widget-input {
@@ -280,6 +281,25 @@ transition: all 0.3s;
 
 .chat-widget-send:hover {
 transform: scale(1.05);
+}
+
+.chat-widget-cancel {
+margin-right: 10px;
+width: 45px;
+height: 45px;
+background: #ef4444;
+border-radius: 50%;
+display: none;
+align-items: center;
+justify-content: center;
+color: white;
+cursor: pointer;
+transition: all 0.3s;
+}
+
+.chat-widget-cancel:hover {
+transform: scale(1.05);
+background: #dc2626;
 }
 
 .skill-bar {
@@ -1010,6 +1030,9 @@ Aurora IA
 </div>
 </div>
 <div class="chat-widget-footer">
+<button class="chat-widget-cancel" id="chat-widget-cancel">
+<i class="fas fa-times"></i>
+</button>
 <input type="text" class="chat-widget-input" id="chat-widget-input" placeholder="Escribe tu mensaje...">
 <div class="chat-widget-send" id="chat-widget-send">
 <i class="fas fa-paper-plane"></i>
@@ -1868,6 +1891,7 @@ const chatWidget = document.getElementById('chat-widget');
 const chatWidgetClose = document.getElementById('chat-widget-close');
 const chatWidgetInput = document.getElementById('chat-widget-input');
 const chatWidgetSend = document.getElementById('chat-widget-send');
+const chatWidgetCancel = document.getElementById('chat-widget-cancel');
 const chatWidgetBody = document.getElementById('chat-widget-body');
 
 // Abrir/cerrar widget de chat
@@ -1879,41 +1903,15 @@ chatWidgetClose.addEventListener('click', function() {
 chatWidget.classList.remove('active');
 });
 
-// Base de conocimientos para la IA (para demostración)
-const knowledgeBase = {
-    // Servicios
-    "servicios": "Ofrecemos tres servicios principales: Desarrollo Web, Automatización IA e Implementación IA. Nuestro desarrollo web incluye plataformas empresariales de alto rendimiento. La automatización IA abarca chatbots y sistemas inteligentes. La implementación IA integra modelos para análisis predictivo y optimización de procesos.",
-    "desarrollo web": "Creamos plataformas web empresariales de alto rendimiento, sistemas a medida y soluciones digitales optimizadas para maximizar su ROI. Utilizamos tecnologías como React, Node.js y Tailwind CSS.",
-    "automatización ia": "Implementamos sistemas inteligentes de automatización, chatbots avanzados y flujos de trabajo optimizados para mejorar su eficiencia operativa. Trabajamos con ChatGPT, Twilio y diversas APIs.",
-    "implementación ia": "Integramos modelos de inteligencia artificial para análisis predictivo, toma de decisiones y optimización de procesos empresariales. Utilizamos Python, TensorFlow y soluciones de OpenAI.",
-    
-    // Proyectos
-    "proyectos": "Nuestros proyectos destacados incluyen la Plataforma Proyectos Akí, un Asistente Virtual IA y un ERP Empresarial en desarrollo. Cada proyecto está diseñado para resolver necesidades específicas de nuestros clientes.",
-    "proyectos akí": "La Plataforma Proyectos Akí es un sistema integral de gestión inmobiliaria con panel administrativo y catálogo digital de propiedades. Fue desarrollado con React y Node.js, logrando un 60% de mejora en eficiencia operativa.",
-    "asistente virtual": "Nuestro Asistente Virtual IA es un chatbot inteligente para atención al cliente con capacidad de aprendizaje y respuestas contextualizadas. Utiliza ChatGPT y Twilio para reducir en un 80% los tiempos de respuesta.",
-    "erp": "Estamos desarrollando un ERP Empresarial con sistema de gestión, análisis predictivo y dashboard en tiempo real. Se está construyendo con React y Python.",
-    
-    // Tecnologías
-    "tecnologías": "Trabajamos con un stack tecnológico moderno que incluye React, Node.js, Python, TensorFlow, MongoDB, AWS, Docker, Git, Sass, React Native, OpenAI y Figma.",
-    "react": "React es nuestra biblioteca principal para el desarrollo de interfaces de usuario. Nos permite crear componentes reutilizables y aplicaciones web rápidas y eficientes.",
-    "node.js": "Utilizamos Node.js para el desarrollo del backend, permitiéndonos crear aplicaciones escalables y de alto rendimiento con JavaScript.",
-    "python": "Python es esencial para nuestros proyectos de IA, especialmente con bibliotecas como TensorFlow y soluciones de OpenAI para el procesamiento de lenguaje natural.",
-    "tensorflow": "TensorFlow es nuestra plataforma principal para el desarrollo de modelos de machine learning y deep learning, permitiéndonos crear soluciones de IA personalizadas.",
-    
-    // Sobre Mathias
-    "mathias": "Soy Mathias, especialista en desarrollo de soluciones digitales con enfoque en resultados medibles. Mi experiencia combina conocimiento técnico profundo con visión de negocio para crear soluciones que generan valor real.",
-    "experiencia": "Tengo más de 5 años de experiencia en desarrollo web e implementación de soluciones de IA. Mis competencias clave son Desarrollo Full Stack (95%), Inteligencia Artificial (90%) y Arquitectura de Sistemas (85%).",
-    
-    // Proceso
-    "proceso": "Nuestra metodología de trabajo sigue 5 fases: Análisis, Diseño, Desarrollo, Implementación y Soporte. Cada fase está diseñada para garantizar la calidad y el éxito del proyecto.",
-    "análisis": "En la fase de Análisis realizamos una evaluación integral de necesidades del negocio, análisis de procesos actuales, definición de KPIs y métricas de éxito, propuesta de solución con enfoque en ROI y planificación detallada.",
-    "diseño": "En la fase de Diseño desarrollamos la arquitectura técnica, prototipos funcionales, definimos flujos de trabajo y experiencia de usuario, seleccionamos tecnologías adecuadas y validamos con stakeholders.",
-    "desarrollo": "En la fase de Desarrollo implementamos siguiendo mejores prácticas, integramos sistemas existentes, implementamos modelos de IA cuando es requerido, realizamos pruebas exhaustivas y creamos documentación técnica completa.",
-    
-    // Resultados
-    "resultados": "Nuestras soluciones han generado impactos medibles como +60% en eficiencia operativa, -80% en tiempo de respuesta, 24/7 disponibilidad del sistema y 100% satisfacción del cliente.",
-    "casos de éxito": "Nuestros casos de éxito incluyen Proyectos Akí (60% mejora en eficiencia), una Empresa de Servicios (80% reducción en tiempos de respuesta) y Retail Digital (35% aumento en conversiones)."
-};
+// Función para cancelar todas las peticiones pendientes
+let currentController = null;
+
+function cancelCurrentRequest() {
+    if (currentController) {
+        currentController.abort();
+        currentController = null;
+    }
+}
 
 // Función para mostrar indicador de escritura
 function showTypingIndicator(container) {
@@ -1948,29 +1946,6 @@ function addMessage(container, message, isUser = false) {
     container.scrollTop = container.scrollHeight;
 }
 
-// Función para obtener respuesta de la IA (demostración)
-function getAIResponse(userMessage) {
-    // Convertir a minúsculas para mejor coincidencia
-    const message = userMessage.toLowerCase();
-    
-    // Buscar palabras clave en el mensaje
-    for (const [keyword, response] of Object.entries(knowledgeBase)) {
-        if (message.includes(keyword)) {
-            return response;
-        }
-    }
-    
-    // Respuestas predeterminadas si no se encuentra ninguna palabra clave
-    const defaultResponses = [
-        "Gracias por tu pregunta. Para información más específica sobre nuestros servicios, te recomiendo visitar la sección de Servicios o contactarnos directamente.",
-        "Esa es una excelente pregunta. Nuestro equipo especializado puede proporcionarte más detalles. ¿Te gustaría que te contactáramos?",
-        "Agradecemos tu interés en Aurora Digital. Si necesitas más información, no dudes en contactarnos a través de nuestro formulario o WhatsApp.",
-        "Para responder adecuadamente tu consulta, necesitaríamos más detalles. ¿Podrías especificar un poco más tu pregunta?"
-    ];
-    
-    return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
-}
-
 // Función para enviar mensaje a la API real de OpenAI GPT-4o Mini
 async function sendRealMessage(inputElement, containerElement) {
     const message = inputElement.value.trim();
@@ -1978,55 +1953,76 @@ async function sendRealMessage(inputElement, containerElement) {
         addMessage(containerElement, message, true);
         inputElement.value = '';
         
+        // Mostrar botón de cancelar
+        chatWidgetCancel.style.display = 'flex';
+        
         // Mostrar indicador de escritura
         const typingIndicator = showTypingIndicator(containerElement);
         
+        // Timeout para cancelar si tarda demasiado (25 segundos)
+        const timeoutId = setTimeout(() => {
+            removeTypingIndicator(typingIndicator);
+            addMessage(containerElement, "⏱️ La respuesta está tardando demasiado. Por favor, intenta nuevamente.");
+            chatWidgetCancel.style.display = 'none';
+            currentController = null;
+        }, 25000);
+
         try {
-            // Usar la ruta relativa al backend
+            // Cancelar petición anterior si existe
+            cancelCurrentRequest();
+            
+            // Crear nuevo controller para esta petición
+            currentController = new AbortController();
+            const signal = currentController.signal;
+
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ message })
+                body: JSON.stringify({ message }),
+                signal
             });
-            
+
+            // Limpiar timeout si la respuesta llega
+            clearTimeout(timeoutId);
+            removeTypingIndicator(typingIndicator);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error en el servidor');
+            }
+
             const data = await response.json();
             
-            // Eliminar indicador de escritura
-            removeTypingIndicator(typingIndicator);
+            // Verificar que la respuesta no esté vacía
+            if (!data.response || data.response.trim() === '') {
+                throw new Error('Respuesta vacía de la IA');
+            }
             
-            // Agregar respuesta al chat
             addMessage(containerElement, data.response);
+            chatWidgetCancel.style.display = 'none';
+            currentController = null;
         } catch (error) {
-            console.error('Error:', error);
-            // Eliminar indicador de escritura
+            clearTimeout(timeoutId);
             removeTypingIndicator(typingIndicator);
             
-            // Mostrar mensaje de error
-            addMessage(containerElement, "Lo siento, ocurrió un error al procesar tu solicitud. Por favor, intenta nuevamente más tarde.");
+            console.error('Error en chat:', error.message);
+            
+            let errorMessage = "❌ Ocurrió un error. Por favor, intenta nuevamente.";
+            
+            if (error.name === 'AbortError') {
+                errorMessage = "⏱️ La solicitud fue cancelada.";
+            } else if (error.message.includes('Respuesta vacía')) {
+                errorMessage = "🤖 La IA no generó una respuesta válida.";
+            } else if (error.message.includes('tardó demasiado')) {
+                errorMessage = "⏱️ El servidor está ocupado. Intenta en unos segundos.";
+            }
+            
+            addMessage(containerElement, errorMessage);
+            chatWidgetCancel.style.display = 'none';
+            currentController = null;
         }
-    }
-}
-
-// Función para enviar mensaje (demostración)
-function sendDemoMessage(inputElement, containerElement) {
-    const message = inputElement.value.trim();
-    if (message) {
-        addMessage(containerElement, message, true);
-        inputElement.value = '';
-        
-        // Mostrar indicador de escritura
-        const typingIndicator = showTypingIndicator(containerElement);
-        
-        // Simular tiempo de procesamiento
-        setTimeout(() => {
-            removeTypingIndicator(typingIndicator);
-            
-            // Obtener respuesta de la IA
-            const response = getAIResponse(message);
-            addMessage(containerElement, response);
-        }, 1500);
     }
 }
 
@@ -2060,6 +2056,14 @@ chatWidgetInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         sendRealMessage(chatWidgetInput, chatWidgetBody);
     }
+});
+
+// Evento para cancelar petición
+chatWidgetCancel.addEventListener('click', () => {
+    cancelCurrentRequest();
+    chatWidgetCancel.style.display = 'none';
+    removeTypingIndicator(document.querySelector('.typing-indicator'));
+    addMessage(chatWidgetBody, "❌ Solicitud cancelada");
 });
 
 // Smooth scrolling

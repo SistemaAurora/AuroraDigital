@@ -148,7 +148,7 @@ REGLAS IMPORTANTES:
 - No inventes información que no esté en este contexto.` },
                     { role: 'user', content: message }
                 ],
-                max_tokens: 800,
+                max_tokens: 500,
                 temperature: 0.7
             },
             {
@@ -156,7 +156,7 @@ REGLAS IMPORTANTES:
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${OPENAI_API_KEY}`
                 },
-                timeout: 10000
+                timeout: 20000
             }
         );
         
@@ -169,6 +169,31 @@ REGLAS IMPORTANTES:
         });
     }
 });
+
+const aiResponse = response.data.choices[0].message.content;
+        console.log('Respuesta generada:', aiResponse.substring(0, 50));
+        
+        res.json({ response: aiResponse });
+    } catch (error) {
+        console.error('Error detallado:', error.message);
+        
+        let errorMessage = 'Error al procesar la solicitud';
+        
+        if (error.code === 'ECONNABORTED') {
+            errorMessage = 'La solicitud tardó demasiado tiempo. Por favor, intenta nuevamente.';
+        } else if (error.response?.status === 429) {
+            errorMessage = 'Demasiadas solicitudes. Por favor, espera un momento e intenta nuevamente.';
+        } else if (error.response?.status === 401) {
+            errorMessage = 'Error de autenticación. Verifica la configuración.';
+        }
+        
+        res.status(500).json({ 
+            error: errorMessage,
+            details: error.response?.data?.error?.message || error.message
+        });
+    }
+});
+
 
 // Para todas las demás rutas, servir index.html (para SPA)
 app.get('*', (req, res) => {
