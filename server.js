@@ -4,11 +4,27 @@ const cors = require('cors');
 require('dotenv').config(); // Cargar variables de entorno
 const app = express();
 
-app.use(cors());
+// Middleware mejorado
+app.use(cors({
+    origin: ['https://aurora-digital.vercel.app', 'http://localhost:3000'],
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // Usar variable de entorno para la clave de API
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// Verificar que la clave de API esté configurada
+if (!OPENAI_API_KEY) {
+    console.error('ERROR: OPENAI_API_KEY no está configurada en las variables de entorno');
+    process.exit(1);
+}
+
+// Endpoint de salud para verificar que el servidor funciona
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', message: 'Servidor funcionando correctamente' });
+});
 
 // Prompt del sistema con toda la información de Aurora Digital
 const SYSTEM_PROMPT = `Eres Aurora IA, un asistente especializado de Aurora Digital. Tu conocimiento se limita exclusivamente a la información sobre Aurora Digital que se detalla a continuación.
@@ -122,6 +138,11 @@ app.post('/api/chat', async (req, res) => {
   try {
     const { message } = req.body;
     
+    // Validar que el mensaje exista
+    if (!message) {
+        return res.status(400).json({ error: 'El mensaje es requerido' });
+    }
+    
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
@@ -137,14 +158,18 @@ app.post('/api/chat', async (req, res) => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENAI_API_KEY}`
-        }
+        },
+        timeout: 15000 // 15 segundos de timeout
       }
     );
     
     res.json({ response: response.data.choices[0].message.content });
   } catch (error) {
-    console.error('Error:', error.response ? error.response.data : error.message);
-    res.status(500).json({ error: 'Error al procesar la solicitud' });
+    console.error('Error en la API de OpenAI:', error.response?.data || error.message);
+    res.status(500).json({ 
+        error: 'Error al procesar la solicitud',
+        details: error.response?.data?.error?.message || 'Error desconocido'
+    });
   }
 });
 
