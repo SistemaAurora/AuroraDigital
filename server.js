@@ -178,7 +178,7 @@ app.post('/api/chat', async (req, res) => {
 
         // Preparar la solicitud a OpenAI con formato correcto
         const openaiRequest = {
-            model: 'gpt-5-nano',
+            model: 'gpt-4o-mini',
             messages: [
                 { 
                     role: 'system', 
