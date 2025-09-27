@@ -16,7 +16,7 @@ app.get('/api/health', (req, res) => {
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// Texto del sistema simplificado para evitar problemas de sintaxis
+// Texto del sistema con instrucciones específicas para formato
 const SYSTEM_PROMPT = `Eres Aurora IA, un asistente especializado de Aurora Digital. Tu conocimiento se limita exclusivamente a la información sobre Aurora Digital que se detalla a continuación.
 
 SOBRE AURORA DIGITAL:
@@ -124,40 +124,106 @@ REGLAS IMPORTANTES:
 - Sé útil, conciso y profesional en tus respuestas.
 - No inventes información que no esté en este contexto.`;
 
+// Función para limpiar formato markdown
+function cleanMarkdown(text) {
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Eliminar **texto**
+        .replace(/#{1,6}\s+/g, '') // Eliminar encabezados #
+        .replace(/```[\s\S]*?```/g, '') // Eliminar bloques de código
+        .replace(/`([^`]+)`/g, '$1') // Eliminar `código`
+        .replace(/---/g, '') // Eliminar separadores
+        .replace(/\n{3,}/g, '\n\n') // Reducir múltiples saltos de línea
+        .trim();
+}
+
+// Función para dividir texto en mensajes cortos
+function splitIntoMessages(text, maxMessages = 5) {
+    // Dividir por párrafos
+    let paragraphs = text.split('\n\n').filter(p => p.trim().length > 0);
+    
+    // Si hay pocos párrafos, devolverlos como están
+    if (paragraphs.length <= maxMessages) {
+        return paragraphs;
+    }
+    
+    // Si hay muchos párrafos, agruparlos
+    const messages = [];
+    const messagesCount = Math.min(maxMessages, paragraphs.length);
+    const paragraphsPerMessage = Math.ceil(paragraphs.length / messagesCount);
+    
+    for (let i = 0; i < messagesCount; i++) {
+        const start = i * paragraphsPerMessage;
+        const end = start + paragraphsPerMessage;
+        const group = paragraphs.slice(start, end);
+        messages.push(group.join('\n\n'));
+    }
+    
+    return messages;
+}
+
 // Función para proporcionar respuestas de respaldo basadas en palabras clave
 function getFallbackResponse(message) {
     const lowerMessage = message.toLowerCase();
     
     // Respuestas para saludos
     if (lowerMessage.includes('hola') || lowerMessage.includes('buenos dias') || lowerMessage.includes('buenas tardes')) {
-        return "¡Hola! Soy Aurora IA, el asistente virtual de Aurora Digital. ¿En qué puedo ayudarte hoy?";
+        return ["¡Hola! Soy Aurora IA, el asistente virtual de Aurora Digital.", "¿En qué puedo ayudarte hoy?"];
     }
     
     // Respuestas para servicios
     if (lowerMessage.includes('servicios') || lowerMessage.includes('hacen') || lowerMessage.includes('ofrecen')) {
-        return "En Aurora Digital ofrecemos tres servicios principales: Desarrollo Web, Automatización IA e Implementación IA. ¿Te gustaría saber más sobre alguno en particular?";
+        return [
+            "En Aurora Digital ofrecemos tres servicios principales:",
+            "1. Desarrollo Web: Creamos plataformas web empresariales de alto rendimiento.",
+            "2. Automatización IA: Implementamos sistemas inteligentes de automatización.",
+            "3. Implementación IA: Integramos modelos de inteligencia artificial.",
+            "¿Te gustaría saber más sobre alguno en particular?"
+        ];
     }
     
     // Respuestas para proyectos
     if (lowerMessage.includes('proyectos') || lowerMessage.includes('proyecto') || lowerMessage.includes('akí')) {
-        return "Nuestros proyectos destacados incluyen la Plataforma Proyectos Akí, un Asistente Virtual IA y un ERP Empresarial en desarrollo. ¿Sobre cuál te gustaría más información?";
+        return [
+            "Nuestros proyectos destacados incluyen:",
+            "1. Plataforma Proyectos Akí: Sistema de gestión inmobiliaria.",
+            "2. Asistente Virtual IA: Chatbot para atención al cliente.",
+            "3. ERP Empresarial: Sistema de gestión empresarial en desarrollo.",
+            "¿Sobre cuál te gustaría más información?"
+        ];
     }
     
     // Respuestas para contacto
     if (lowerMessage.includes('contacto') || lowerMessage.includes('contactar') || lowerMessage.includes('whatsapp')) {
-        return "Puedes contactarnos al +51 906703606 o por WhatsApp al mismo número. También puedes escribirnos a mathiasmoreyra05@gmail.com. ¿En qué puedo ayudarte?";
+        return [
+            "Puedes contactarnos de varias formas:",
+            "Teléfono/WhatsApp: +51 906703606",
+            "Email: mathiasmoreyra05@gmail.com",
+            "¿En qué puedo ayudarte?"
+        ];
     }
     
     // Respuestas para tecnologías
     if (lowerMessage.includes('tecnologías') || lowerMessage.includes('tecnologia') || lowerMessage.includes('stack')) {
-        return "Trabajamos con tecnologías modernas como React, Node.js, Python, TensorFlow, OpenAI, MongoDB y AWS. ¿Hay alguna tecnología específica sobre la que te gustaría saber más?";
+        return [
+            "Trabajamos con tecnologías modernas como:",
+            "Frontend: React, Tailwind CSS",
+            "Backend: Node.js, Python",
+            "IA/ML: TensorFlow, OpenAI",
+            "Base de datos: MongoDB",
+            "Cloud: AWS",
+            "¿Hay alguna tecnología específica sobre la que te gustaría saber más?"
+        ];
     }
     
     // Respuesta por defecto
-    return "Soy Aurora IA, el asistente virtual de Aurora Digital. Estoy aquí para ayudarte con información sobre nuestros servicios, proyectos y tecnologías. ¿En qué puedo asistirte?";
+    return [
+        "Soy Aurora IA, el asistente virtual de Aurora Digital.",
+        "Estoy aquí para ayudarte con información sobre nuestros servicios, proyectos y tecnologías.",
+        "¿En qué puedo asistirte?"
+    ];
 }
 
-// Endpoint del chat con mejor manejo de errores
+// Endpoint del chat con mejor manejo de errores y formato
 app.post('/api/chat', async (req, res) => {
     try {
         const { message } = req.body;
@@ -178,7 +244,7 @@ app.post('/api/chat', async (req, res) => {
 
         // Preparar la solicitud a OpenAI con formato correcto
         const openaiRequest = {
-            model: 'gpt-4o-mini',
+            model: 'gpt-4o-mini',  // Modelo que estás usando
             messages: [
                 { 
                     role: 'system', 
@@ -190,7 +256,7 @@ app.post('/api/chat', async (req, res) => {
             temperature: 1
         };
 
-        console.log('Enviando solicitud a OpenAI...');
+        console.log('Enviando solicitud a OpenAI con modelo:', openaiRequest.model);
 
         const response = await axios.post(
             'https://api.openai.com/v1/chat/completions',
@@ -218,16 +284,27 @@ app.post('/api/chat', async (req, res) => {
             console.error('La respuesta de OpenAI está vacía o no es válida');
             
             // Usar respuesta de respaldo
-            const fallbackResponse = getFallbackResponse(message);
-            console.log('Usando respuesta de respaldo:', fallbackResponse);
+            const fallbackMessages = getFallbackResponse(message);
+            console.log('Usando respuesta de respaldo con', fallbackMessages.length, 'mensajes');
             
-            return res.json({ response: fallbackResponse });
+            return res.json({ 
+                response: fallbackMessages[0], // Primer mensaje
+                splitMessages: fallbackMessages.slice(1) // Mensajes adicionales
+            });
         }
         
-        const aiResponse = messageContent.trim();
-        console.log('Respuesta generada (limpia):', aiResponse);
+        // Limpiar formato markdown
+        const cleanText = cleanMarkdown(messageContent);
+        console.log('Respuesta limpia:', cleanText.substring(0, 100));
         
-        res.json({ response: aiResponse });
+        // Dividir en múltiples mensajes si es necesario
+        const splitMessages = splitIntoMessages(cleanText);
+        console.log('Dividido en', splitMessages.length, 'mensajes');
+        
+        res.json({ 
+            response: splitMessages[0], // Primer mensaje
+            splitMessages: splitMessages.slice(1) // Mensajes adicionales
+        });
     } catch (error) {
         console.error('Error detallado:', error.message);
         

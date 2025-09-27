@@ -1990,7 +1990,7 @@ async function sendRealMessage(inputElement, containerElement) {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Error en el servidor');
+                throw new Error(`${errorData.error}: ${errorData.details}`);
             }
 
             const data = await response.json();
@@ -2000,9 +2000,27 @@ async function sendRealMessage(inputElement, containerElement) {
                 throw new Error('Respuesta vacía de la IA');
             }
             
+            // Agregar primer mensaje
             addMessage(containerElement, data.response);
-            chatWidgetCancel.style.display = 'none';
-            currentController = null;
+            
+            // Si hay mensajes adicionales, mostrarlos con un retraso
+            if (data.splitMessages && data.splitMessages.length > 0) {
+                data.splitMessages.forEach((msg, index) => {
+                    setTimeout(() => {
+                        addMessage(containerElement, msg);
+                        
+                        // Si es el último mensaje, ocultar el botón de cancelar
+                        if (index === data.splitMessages.length - 1) {
+                            chatWidgetCancel.style.display = 'none';
+                            currentController = null;
+                        }
+                    }, 1500 * (index + 1)); // 1.5 segundos entre mensajes
+                });
+            } else {
+                // Si no hay mensajes adicionales, ocultar el botón de cancelar
+                chatWidgetCancel.style.display = 'none';
+                currentController = null;
+            }
         } catch (error) {
             clearTimeout(timeoutId);
             removeTypingIndicator(typingIndicator);
@@ -2017,6 +2035,10 @@ async function sendRealMessage(inputElement, containerElement) {
                 errorMessage = "🤖 La IA no generó una respuesta válida.";
             } else if (error.message.includes('tardó demasiado')) {
                 errorMessage = "⏱️ El servidor está ocupado. Intenta en unos segundos.";
+            } else if (error.message.includes('Error de autenticación')) {
+                errorMessage = "🔑 Error de autenticación. Contacta al administrador.";
+            } else if (error.message.includes('Solicitud incorrecta')) {
+                errorMessage = "📝 Error en el formato de la solicitud.";
             }
             
             addMessage(containerElement, errorMessage);
