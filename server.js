@@ -124,6 +124,39 @@ REGLAS IMPORTANTES:
 - Sé útil, conciso y profesional en tus respuestas.
 - No inventes información que no esté en este contexto.`;
 
+// Función para proporcionar respuestas de respaldo basadas en palabras clave
+function getFallbackResponse(message) {
+    const lowerMessage = message.toLowerCase();
+    
+    // Respuestas para saludos
+    if (lowerMessage.includes('hola') || lowerMessage.includes('buenos dias') || lowerMessage.includes('buenas tardes')) {
+        return "¡Hola! Soy Aurora IA, el asistente virtual de Aurora Digital. ¿En qué puedo ayudarte hoy?";
+    }
+    
+    // Respuestas para servicios
+    if (lowerMessage.includes('servicios') || lowerMessage.includes('hacen') || lowerMessage.includes('ofrecen')) {
+        return "En Aurora Digital ofrecemos tres servicios principales: Desarrollo Web, Automatización IA e Implementación IA. ¿Te gustaría saber más sobre alguno en particular?";
+    }
+    
+    // Respuestas para proyectos
+    if (lowerMessage.includes('proyectos') || lowerMessage.includes('proyecto') || lowerMessage.includes('akí')) {
+        return "Nuestros proyectos destacados incluyen la Plataforma Proyectos Akí, un Asistente Virtual IA y un ERP Empresarial en desarrollo. ¿Sobre cuál te gustaría más información?";
+    }
+    
+    // Respuestas para contacto
+    if (lowerMessage.includes('contacto') || lowerMessage.includes('contactar') || lowerMessage.includes('whatsapp')) {
+        return "Puedes contactarnos al +51 906703606 o por WhatsApp al mismo número. También puedes escribirnos a mathiasmoreyra05@gmail.com. ¿En qué puedo ayudarte?";
+    }
+    
+    // Respuestas para tecnologías
+    if (lowerMessage.includes('tecnologías') || lowerMessage.includes('tecnologia') || lowerMessage.includes('stack')) {
+        return "Trabajamos con tecnologías modernas como React, Node.js, Python, TensorFlow, OpenAI, MongoDB y AWS. ¿Hay alguna tecnología específica sobre la que te gustaría saber más?";
+    }
+    
+    // Respuesta por defecto
+    return "Soy Aurora IA, el asistente virtual de Aurora Digital. Estoy aquí para ayudarte con información sobre nuestros servicios, proyectos y tecnologías. ¿En qué puedo asistirte?";
+}
+
 // Endpoint del chat con mejor manejo de errores
 app.post('/api/chat', async (req, res) => {
     try {
@@ -171,9 +204,28 @@ app.post('/api/chat', async (req, res) => {
             }
         );
         
-        const aiResponse = response.data.choices[0].message.content;
-        console.log('Respuesta generada:', aiResponse.substring(0, 50));
         console.log('Status OpenAI:', response.status);
+        
+        // Extraer el contenido de la respuesta de manera segura
+        const choice = response.data.choices && response.data.choices[0];
+        const messageContent = choice && choice.message && choice.message.content;
+        
+        console.log('Respuesta generada (cruda):', messageContent);
+        console.log('Longitud de la respuesta:', messageContent ? messageContent.length : 0);
+        
+        // Validar la respuesta
+        if (!messageContent || typeof messageContent !== 'string' || messageContent.trim() === '') {
+            console.error('La respuesta de OpenAI está vacía o no es válida');
+            
+            // Usar respuesta de respaldo
+            const fallbackResponse = getFallbackResponse(message);
+            console.log('Usando respuesta de respaldo:', fallbackResponse);
+            
+            return res.json({ response: fallbackResponse });
+        }
+        
+        const aiResponse = messageContent.trim();
+        console.log('Respuesta generada (limpia):', aiResponse);
         
         res.json({ response: aiResponse });
     } catch (error) {
