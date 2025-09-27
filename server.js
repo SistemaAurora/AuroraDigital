@@ -33,15 +33,15 @@ app.post('/api/chat', async (req, res) => {
         }
 
         console.log('Procesando mensaje:', message.substring(0, 50));
+        console.log('API Key configurada:', OPENAI_API_KEY ? 'SÍ' : 'NO');
 
-        const response = await axios.post(
-            'https://api.openai.com/v1/chat/completions',
-            {
-                model: 'gpt-5-nano',
-                messages: [
-                    { 
-                        role: 'system', 
-                        content: `Eres Aurora IA, un asistente especializado de Aurora Digital. Tu conocimiento se limita exclusivamente a la información sobre Aurora Digital que se detalla a continuación.
+        // Preparar la solicitud a OpenAI con formato correcto
+        const openaiRequest = {
+            model: 'gpt-5-nano',
+            messages: [
+                { 
+                    role: 'system', 
+                    content: 'Eres Aurora IA, un asistente especializado de Aurora Digital. Tu conocimiento se limita exclusivamente a la información sobre Aurora Digital que se detalla a continuación.
 
 SOBRE AURORA DIGITAL:
 - Nombre: Aurora Digital
@@ -146,13 +146,19 @@ REGLAS IMPORTANTES:
 - No debes responder preguntas fuera del contexto de Aurora Digital.
 - Si te preguntan algo no relacionado, amablemente indica que solo puedes ayudar con consultas sobre Aurora Digital.
 - Sé útil, conciso y profesional en tus respuestas.
-- No inventes información que no esté en este contexto.` 
-                    },
-                    { role: 'user', content: message }
-                ],
-                max_tokens: 500,
-                temperature: 0.7
-            },
+- No inventes información que no esté en este contexto.' 
+                },
+                { role: 'user', content: message }
+            ],
+            max_tokens: 500,
+            temperature: 0.7
+        };
+
+        console.log('Enviando solicitud a OpenAI:', JSON.stringify(openaiRequest, null, 2));
+
+        const response = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            openaiRequest,
             {
                 headers: {
                     'Content-Type': 'application/json',
@@ -164,24 +170,39 @@ REGLAS IMPORTANTES:
         
         const aiResponse = response.data.choices[0].message.content;
         console.log('Respuesta generada:', aiResponse.substring(0, 50));
+        console.log('Status OpenAI:', response.status);
         
         res.json({ response: aiResponse });
     } catch (error) {
         console.error('Error detallado:', error.message);
         
+        // Registrar más detalles del error
+        if (error.response) {
+            console.error('Status:', error.response.status);
+            console.error('Headers:', error.response.headers);
+            console.error('Data:', error.response.data);
+        }
+        
         let errorMessage = 'Error al procesar la solicitud';
+        let errorDetails = error.message;
         
         if (error.code === 'ECONNABORTED') {
             errorMessage = 'La solicitud tardó demasiado tiempo';
+            errorDetails = 'Timeout de la solicitud';
         } else if (error.response?.status === 429) {
             errorMessage = 'Demasiadas solicitudes. Espera un momento.';
+            errorDetails = 'Límite de velocidad excedido';
         } else if (error.response?.status === 401) {
             errorMessage = 'Error de autenticación. Verifica la API key.';
+            errorDetails = 'API key inválida o expirada';
+        } else if (error.response?.status === 400) {
+            errorMessage = 'Solicitud incorrecta a la API de OpenAI.';
+            errorDetails = error.response?.data?.error?.message || 'Formato inválido';
         }
         
         res.status(500).json({ 
             error: errorMessage,
-            details: error.response?.data?.error?.message || error.message
+            details: errorDetails
         });
     }
 });
