@@ -16,6 +16,35 @@ app.get('/api/health', (req, res) => {
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+// Almacenamiento de memoria para la conversación
+const conversationMemory = new Map();
+
+// Función para obtener o crear memoria de conversación
+function getConversationMemory(sessionId) {
+    if (!conversationMemory.has(sessionId)) {
+        conversationMemory.set(sessionId, {
+            messages: [],
+            lastActivity: Date.now()
+        });
+    }
+    return conversationMemory.get(sessionId);
+}
+
+// Función para limpiar memoria antigua (más de 30 minutos)
+function cleanOldMemory() {
+    const now = Date.now();
+    const thirtyMinutes = 30 * 60 * 1000;
+    
+    for (const [sessionId, memory] of conversationMemory.entries()) {
+        if (now - memory.lastActivity > thirtyMinutes) {
+            conversationMemory.delete(sessionId);
+        }
+    }
+}
+
+// Limpiar memoria cada 5 minutos
+setInterval(cleanOldMemory, 5 * 60 * 1000);
+
 // Texto del sistema con instrucciones específicas para formato
 const SYSTEM_PROMPT = `Eres Aurora IA, un asistente especializado de Aurora Digital. Tu conocimiento se limita exclusivamente a la información sobre Aurora Digital que se detalla a continuación.
 
@@ -122,9 +151,10 @@ REGLAS IMPORTANTES:
 - No debes responder preguntas fuera del contexto de Aurora Digital.
 - Si te preguntan algo no relacionado, amablemente indica que solo puedes ayudar con consultas sobre Aurora Digital.
 - Sé útil, conciso y profesional en tus respuestas.
-- No inventes información que no esté en este contexto.`;
+- No inventes información que no esté en este contexto
+- No uses formato MarkDown`;
 
-// Función para limpiar formato markdown
+// Función mejorada para limpiar formato markdown
 function cleanMarkdown(text) {
     return text
         .replace(/\*\*(.*?)\*\*/g, '$1') // Eliminar **texto**
@@ -136,8 +166,8 @@ function cleanMarkdown(text) {
         .trim();
 }
 
-// Función para dividir texto en mensajes cortos
-function splitIntoMessages(text, maxMessages = 5) {
+// Función mejorada para dividir texto en mensajes cortos
+function splitIntoMessages(text, maxMessages = 30) {
     // Dividir por párrafos
     let paragraphs = text.split('\n\n').filter(p => p.trim().length > 0);
     
@@ -146,19 +176,60 @@ function splitIntoMessages(text, maxMessages = 5) {
         return paragraphs;
     }
     
-    // Si hay muchos párrafos, agruparlos
+    // Si hay muchos párrafos, dividirlos más inteligentemente
     const messages = [];
-    const messagesCount = Math.min(maxMessages, paragraphs.length);
-    const paragraphsPerMessage = Math.ceil(paragraphs.length / messagesCount);
+    let currentMessage = '';
     
-    for (let i = 0; i < messagesCount; i++) {
-        const start = i * paragraphsPerMessage;
-        const end = start + paragraphsPerMessage;
-        const group = paragraphs.slice(start, end);
-        messages.push(group.join('\n\n'));
+    for (const paragraph of paragraphs) {
+        // Si el párrafo es muy largo (más de 200 caracteres), dividirlo
+        if (paragraph.length > 200) {
+            // Si ya hay contenido en el mensaje actual, agregarlo primero
+            if (currentMessage.trim()) {
+                messages.push(currentMessage.trim());
+                currentMessage = '';
+            }
+            
+            // Dividir el párrafo largo en oraciones
+            const sentences = paragraph.split('. ');
+            let tempSentence = '';
+            
+            for (const sentence of sentences) {
+                if (tempSentence.length + sentence.length > 150) {
+                    if (tempSentence.trim()) {
+                        messages.push(tempSentence.trim() + '.');
+                    }
+                    tempSentence = sentence + '. ';
+                } else {
+                    tempSentence += sentence + '. ';
+                }
+            }
+            
+            // Agregar la última parte del párrafo
+            if (tempSentence.trim()) {
+                currentMessage = tempSentence.trim();
+            }
+        } else {
+            // Si el párrafo es corto, agregarlo al mensaje actual
+            if (currentMessage.length + paragraph.length > 250) {
+                messages.push(currentMessage.trim());
+                currentMessage = paragraph;
+            } else {
+                if (currentMessage) {
+                    currentMessage += '\n\n' + paragraph;
+                } else {
+                    currentMessage = paragraph;
+                }
+            }
+        }
     }
     
-    return messages;
+    // Agregar el último mensaje si tiene contenido
+    if (currentMessage.trim()) {
+        messages.push(currentMessage.trim());
+    }
+    
+    // Limitar al número máximo de mensajes
+    return messages.slice(0, maxMessages);
 }
 
 // Función para proporcionar respuestas de respaldo basadas en palabras clave
@@ -174,9 +245,9 @@ function getFallbackResponse(message) {
     if (lowerMessage.includes('servicios') || lowerMessage.includes('hacen') || lowerMessage.includes('ofrecen')) {
         return [
             "En Aurora Digital ofrecemos tres servicios principales:",
-            "1. Desarrollo Web: Creamos plataformas web empresariales de alto rendimiento.",
-            "2. Automatización IA: Implementamos sistemas inteligentes de automatización.",
-            "3. Implementación IA: Integramos modelos de inteligencia artificial.",
+            "1. Desarrollo Web: Creamos plataformas web empresariales de alto rendimiento, sistemas a medida y soluciones digitales optimizadas para maximizar el ROI. Utilizamos tecnologías como React, Node.js y Tailwind CSS.",
+            "2. Automatización IA: Implementamos sistemas inteligentes de automatización, chatbots avanzados y flujos de trabajo optimizados para mejorar la eficiencia operativa. Usamos tecnologías como ChatGPT, Twilio y APIs.",
+            "3. Implementación IA: Integramos modelos de inteligencia artificial para análisis predictivo, toma de decisiones y optimización de procesos empresariales, utilizando tecnologías como Python, TensorFlow y OpenAI.",
             "¿Te gustaría saber más sobre alguno en particular?"
         ];
     }
@@ -185,9 +256,9 @@ function getFallbackResponse(message) {
     if (lowerMessage.includes('proyectos') || lowerMessage.includes('proyecto') || lowerMessage.includes('akí')) {
         return [
             "Nuestros proyectos destacados incluyen:",
-            "1. Plataforma Proyectos Akí: Sistema de gestión inmobiliaria.",
-            "2. Asistente Virtual IA: Chatbot para atención al cliente.",
-            "3. ERP Empresarial: Sistema de gestión empresarial en desarrollo.",
+            "1. Plataforma Proyectos Akí: Sistema integral de gestión inmobiliaria con panel administrativo y catalogo digital de propiedades. Fue desarrollado con React y Node.js, logrando un 60% de mejora en eficiencia operativa.",
+            "2. Asistente Virtual IA: Chatbot inteligente para atención al cliente con capacidad de aprendizaje y respuestas contextualizadas. Utiliza ChatGPT y Twilio para reducir en un 80% los tiempos de respuesta.",
+            "3. ERP Empresarial: Sistema de gestión empresarial con análisis predictivo y dashboard en tiempo real. Se está construyendo con React y Python.",
             "¿Sobre cuál te gustaría más información?"
         ];
     }
@@ -206,11 +277,10 @@ function getFallbackResponse(message) {
     if (lowerMessage.includes('tecnologías') || lowerMessage.includes('tecnologia') || lowerMessage.includes('stack')) {
         return [
             "Trabajamos con tecnologías modernas como:",
-            "Frontend: React, Tailwind CSS",
-            "Backend: Node.js, Python",
+            "Frontend: React, Tailwind CSS, Sass, Figma",
+            "Backend: Node.js, Python, MongoDB",
             "IA/ML: TensorFlow, OpenAI",
-            "Base de datos: MongoDB",
-            "Cloud: AWS",
+            "DevOps: Docker, Git, AWS",
             "¿Hay alguna tecnología específica sobre la que te gustaría saber más?"
         ];
     }
@@ -242,17 +312,26 @@ app.post('/api/chat', async (req, res) => {
         console.log('Procesando mensaje:', message.substring(0, 50));
         console.log('API Key configurada:', OPENAI_API_KEY ? 'SI' : 'NO');
 
+        // Obtener o crear memoria de conversación
+        const sessionId = 'default'; // En una app real, usarías un ID de usuario único
+        const memory = getConversationMemory(sessionId);
+        
+        // Actualizar última actividad
+        memory.lastActivity = Date.now();
+
         // Preparar la solicitud a OpenAI con formato correcto
         const openaiRequest = {
-            model: 'gpt-4o-mini',  // Modelo que estás usando
+            model: 'gpt-4o-mini',
             messages: [
                 { 
                     role: 'system', 
                     content: SYSTEM_PROMPT
                 },
+                // Agregar historial de conversación (últimos 10 mensajes)
+                ...memory.messages.slice(-10),
                 { role: 'user', content: message }
             ],
-            max_completion_tokens: 500,
+            max_completion_tokens: 1000, // Aumentamos el límite para respuestas más completas
             temperature: 1
         };
 
@@ -266,7 +345,7 @@ app.post('/api/chat', async (req, res) => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${OPENAI_API_KEY}`
                 },
-                timeout: 20000
+                timeout: 30000 // Aumentamos el timeout a 30 segundos
             }
         );
         
@@ -279,6 +358,9 @@ app.post('/api/chat', async (req, res) => {
         console.log('Respuesta generada (cruda):', messageContent);
         console.log('Longitud de la respuesta:', messageContent ? messageContent.length : 0);
         
+        // Guardar mensaje del usuario en memoria
+        memory.messages.push({ role: 'user', content: message });
+        
         // Validar la respuesta
         if (!messageContent || typeof messageContent !== 'string' || messageContent.trim() === '') {
             console.error('La respuesta de OpenAI está vacía o no es válida');
@@ -286,6 +368,11 @@ app.post('/api/chat', async (req, res) => {
             // Usar respuesta de respaldo
             const fallbackMessages = getFallbackResponse(message);
             console.log('Usando respuesta de respaldo con', fallbackMessages.length, 'mensajes');
+            
+            // Guardar mensajes de respaldo en memoria
+            fallbackMessages.forEach(msg => {
+                memory.messages.push({ role: 'assistant', content: msg });
+            });
             
             return res.json({ 
                 response: fallbackMessages[0], // Primer mensaje
@@ -300,6 +387,11 @@ app.post('/api/chat', async (req, res) => {
         // Dividir en múltiples mensajes si es necesario
         const splitMessages = splitIntoMessages(cleanText);
         console.log('Dividido en', splitMessages.length, 'mensajes');
+        
+        // Guardar respuesta de la IA en memoria
+        splitMessages.forEach(msg => {
+            memory.messages.push({ role: 'assistant', content: msg });
+        });
         
         res.json({ 
             response: splitMessages[0], // Primer mensaje

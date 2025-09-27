@@ -1959,13 +1959,13 @@ async function sendRealMessage(inputElement, containerElement) {
         // Mostrar indicador de escritura
         const typingIndicator = showTypingIndicator(containerElement);
         
-        // Timeout para cancelar si tarda demasiado (25 segundos)
+        // Timeout para cancelar si tarda demasiado (30 segundos)
         const timeoutId = setTimeout(() => {
             removeTypingIndicator(typingIndicator);
             addMessage(containerElement, "⏱️ La respuesta está tardando demasiado. Por favor, intenta nuevamente.");
             chatWidgetCancel.style.display = 'none';
             currentController = null;
-        }, 25000);
+        }, 30000);
 
         try {
             // Cancelar petición anterior si existe
@@ -2014,7 +2014,7 @@ async function sendRealMessage(inputElement, containerElement) {
                             chatWidgetCancel.style.display = 'none';
                             currentController = null;
                         }
-                    }, 1500 * (index + 1)); // 1.5 segundos entre mensajes
+                    }, 2000 * (index + 1)); // 2 segundos entre mensajes para mejor lectura
                 });
             } else {
                 // Si no hay mensajes adicionales, ocultar el botón de cancelar
