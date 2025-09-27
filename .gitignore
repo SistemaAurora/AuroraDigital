@@ -1,0 +1,16 @@
+# Dependencias de Node.js
+node_modules/
+
+# Variables de entorno (¡NUNCA subas esto a GitHub!)
+.env
+
+# Logs
+*.log
+
+# Carpetas de compilación
+dist/
+build/
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
